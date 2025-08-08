@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment & Secrets
+venv/
+.env
+*.env
+config.json
+*.key
+
+# Logs
+*.log
+logs/
+
+# Data (ignore large files and common data formats)
+data/
+*.csv
+*.json
+*.pkl
+*.h5
+*.model
