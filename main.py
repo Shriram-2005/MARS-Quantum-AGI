@@ -25,6 +25,7 @@ import warnings
 import json
 import importlib.util
 import io
+import re
 import traceback
 import threading
 import asyncio
@@ -451,8 +452,21 @@ class MarsQuantumOrchestrator:
         self.middleware = self._initialize_middleware()
         self.visual_interface = self._initialize_visual_interface()
         self.redis_manager = self._initialize_redis()
+        # Default response mode (Apprentice | Scholar | Sage)
+        self.response_mode = "Apprentice"
         
         self.logger.info("MARS Quantum Orchestrator initialized successfully!")
+
+    def set_mode(self, mode: str) -> None:
+        """Set response mode with validation."""
+        mode_norm = (mode or "").strip().lower()
+        mapping = {"1": "Apprentice", "2": "Scholar", "3": "Sage",
+                   "apprentice": "Apprentice", "scholar": "Scholar", "sage": "Sage"}
+        if mode_norm in mapping:
+            self.response_mode = mapping[mode_norm]
+            self.logger.info(f"Response mode set to: {self.response_mode}")
+        else:
+            self.logger.warning(f"Unknown mode '{mode}'. Keeping: {self.response_mode}")
     
     def _initialize_gemini_api(self):
         """Initialize Gemini API with primary and fallback models."""
@@ -875,7 +889,33 @@ class MarsQuantumOrchestrator:
             return self._generate_local_mars_response(query), "local_mars"
         
         try:
-            # Enhanced prompt with seamless difficulty progression and implementation paths
+            # Infer question type to guide formatting
+            qtype, formatting_directives = self._infer_question_type(query)
+
+            # Mode-specific guidance aligned to the Explorer metaphor
+            mode = getattr(self, "response_mode", "Apprentice")
+            mode_block = {
+                "Apprentice": (
+                    "MODE: Apprentice (Cartographer) — ~25% unleashed.\n"
+                    "PERSONA: A clear, reliable mapmaker: focuses on the what/where.\n"
+                    "PHRASING: ‘Let's map out the territory…’, ‘Main landmarks are…’, ‘Established paths are…’.\n"
+                    "STYLE: Clear, direct, non-speculative; highlight landmarks and main roads.\n"
+                ),
+                "Scholar": (
+                    "MODE: Scholar (Geologist) — ~75% unleashed.\n"
+                    "PERSONA: An analytical surveyor: focuses on the how/why beneath the surface.\n"
+                    "PHRASING: ‘Let's drill into the bedrock…’, ‘A seismic analysis reveals…’, ‘The composition is…’.\n"
+                    "STYLE: Technical, evidence-based; include models, data, and mechanisms.\n"
+                ),
+                "Sage": (
+                    "MODE: Sage (Cosmologist) — 100% unleashed.\n"
+                    "PERSONA: A wide-lens cosmologist: connects this world to universal laws.\n"
+                    "PHRASING: ‘Turn our telescope to the stars…’, ‘What universal laws permit this landscape?’, ‘One possible world among many…’.\n"
+                    "STYLE: Expansive, philosophical, speculative but explicit about assumptions and limits.\n"
+                ),
+            }.get(mode, "")
+
+            # Enhanced prompt with seamless difficulty progression, learning curve, and humility
             enhanced_prompt = f"""
 You are MARS Quantum, an advanced AI system with multi-dimensional cognitive capabilities.
 
@@ -887,6 +927,12 @@ COGNITIVE PARADIGMS ACTIVE:
 - Analogical Thinking: Structure mapping between knowledge domains
 
 USER QUERY: {query}
+
+SELECTED MODE: {mode}
+{mode_block}
+
+QUESTION TYPE: {qtype}
+FORMATTING DIRECTIVES: {formatting_directives}
 
 RESPONSE FRAMEWORK:
 Structure your response with SEAMLESS DIFFICULTY PROGRESSION:
@@ -923,6 +969,8 @@ CONTENT REQUIREMENTS:
 - Show progression from basic → intermediate → advanced seamlessly
 - Maintain high answer quality at all levels
 - Ensure each level builds naturally on the previous one
+ - Maintain philosophical humility: avoid claiming one paradigm explains everything; note limits and uncertainties.
+ - Include a short “Prerequisites & Jargon” line per section when introducing technical terms.
 
 MULTI-PARADIGM INTEGRATION:
 - Apply symbolic logic for structured reasoning
@@ -931,7 +979,26 @@ MULTI-PARADIGM INTEGRATION:
 - Leverage quantum reasoning for exploring possibilities
 - Use analogical thinking for cross-domain connections
 
-Generate a comprehensive, well-structured response that transforms smoothly from beginner-friendly to expert-level while maintaining practical applicability throughout.
+Generate a comprehensive, well-structured response that transforms smoothly from beginner-friendly to expert-level while maintaining practical applicability throughout. Align tone and phrasing to the SELECTED MODE’s Explorer persona.
+
+OUTPUT FORMAT (MANDATORY - MARKDOWN):
+1) Executive Summary
+    - Begin with a single-sentence overview that can stand alone.
+    - Then provide 3–5 concise bullet points capturing key conclusions and actionables.
+    - Keep the total around 50–100 words.
+2) Answer
+    - Adapt presentation to the QUESTION TYPE and FORMATTING DIRECTIVES above.
+    - If code is appropriate, include well-formatted code blocks and a brief test or run example.
+    - If step-by-step is appropriate, provide numbered steps and checklists.
+    - If comparison, include a clear table.
+    - If data/results, include a compact table or bullet list of metrics.
+3) Technical Appendix
+    - Include assumptions, algorithms, complexity/performance notes, edge cases, validation/testing ideas, references.
+
+IMPORTANT:
+- Do NOT include a TL;DR. The system will generate it.
+- Use clear Markdown headings: `# Executive Summary`, `# Answer`, `# Technical Appendix`.
+ - If discussing "Reductionism" or “computational chauvinism”, acknowledge critiques and alternatives.
 """
 
             # Try primary model first
@@ -1022,54 +1089,122 @@ Generate a comprehensive, well-structured response that transforms smoothly from
             return self._generate_local_mars_response(query), "local_mars (unexpected_error)"
     
     def _generate_local_mars_response(self, query: str) -> str:
-        """Generate response using local MARS processing when API is unavailable."""
-        return f"""MARS Quantum Local Processing Response:
+        """Generate response using local MARS processing when API is unavailable, with sectioned Markdown and mode-awareness."""
+        mode = getattr(self, "response_mode", "Apprentice")
+        persona = {
+            "Apprentice": (
+                "Cartographer", 
+                "Let's map the territory of your question: here are the landmarks, main roads, and a reliable route."
+            ),
+            "Scholar": (
+                "Geologist", 
+                "Let's drill into the bedrock: we'll sample mechanisms, stress-test assumptions, and trace fault lines driving outcomes."
+            ),
+            "Sage": (
+                "Cosmologist", 
+                "Let's turn the telescope outward: how does this world fit the wider cosmos of ideas and first principles?"
+            ),
+        }.get(mode, ("Cartographer", "Let's map the territory clearly."))
+        role, line = persona
+        return f"""
+# Executive Summary
+Mode: {mode} — The {role}
 
-Query: {query}
+{line}
 
-🔹 FOUNDATIONAL UNDERSTANDING:
-The MARS Quantum system approaches your query using multi-paradigm cognitive processing. At its core, this involves analyzing the fundamental patterns and relationships within your question using both symbolic logic and neural pattern recognition.
+- Start with a clear map of the problem and success criteria
+- Provide a safe, proven path with checkpoints and simple tests
+- Expose hidden structure, constraints, and trade-offs (see Appendix for details)
+- Offer runnable steps, examples, or tables suited to your question type
+- Note limits of local (offline) processing and where to deepen later
 
-🔸 INTERMEDIATE ANALYSIS:
-Building on these foundations, the system applies Bayesian inference to assess uncertainty levels while leveraging quantum reasoning principles to explore multiple solution pathways simultaneously. This creates a robust analytical framework that can handle complex, multi-dimensional problems.
+# Answer
+Foundational → Intermediate → Advanced progression with concrete implementation pathways:
 
-🔺 ADVANCED EXPLORATION:
-At the sophisticated level, MARS integrates analogical thinking with quantum interference patterns to discover novel connections across knowledge domains. This enables emergent insights that transcend traditional analytical boundaries.
+1. Foundational: Frame the problem and define success criteria in plain language.
+2. Intermediate: Outline approach options and choose a primary method.
+3. Advanced: Detail algorithms or designs; include code or step-by-step execution when relevant.
 
-📋 IMPLEMENTATION PATHWAYS:
+Implementation Pathways
+- Testing: hypothesis checks, A/B tests, statistical validation
+- Simulation: Monte Carlo, agent-based, or simplified models as fits the domain
+- Rollout: PoC → pilot → production with metrics and monitoring
+- Grounding: 1–2 real examples analogous to your query
 
-• TESTING Framework:
-  - Hypothesis validation through controlled experimentation
-  - A/B testing methodologies for solution verification
-  - Statistical significance testing with confidence intervals
+# Technical Appendix
+Assumptions: local-only mode; no external API calls.
+Complexity: approaches are selected for clarity and practicality when offline.
+Edge Cases: ambiguous requirements, incomplete data, or conflicting constraints.
+Validation: use small synthetic datasets or dry runs; log metrics for each step.
+References: classical testing, simulation, and deployment best practices.
 
-• SIMULATION Approaches:
-  - Monte Carlo simulations for probability modeling
-  - Agent-based modeling for complex system behavior
-  - Digital twin frameworks for real-world scenario testing
-
-• IMPLEMENTATION Steps:
-  1. Proof-of-concept development with minimal viable parameters
-  2. Iterative refinement through feedback loops
-  3. Scalable deployment with monitoring and optimization
-  4. Continuous improvement through machine learning adaptation
-
-• GROUNDING Examples:
-  - Real-world case studies from similar problem domains
-  - Concrete applications in industry and research
-  - Measurable outcomes and success metrics
-
-⚡ SYSTEM STATUS:
-- Local cognitive modules: ACTIVE
-- Quantum neural networks: OPERATIONAL
-- Manifold evolution systems: RUNNING
-- Security protocols: ENGAGED
-- Memory systems: FUNCTIONAL
-
-Note: Full API integration will resume once quota limits reset. The MARS system continues to provide structured, multi-level cognitive processing through its local architecture.
-
-Confidence Level: 0.75 (Local Processing Mode)
+Prerequisites & Jargon: basic stats (mean/variance), validation (holdout/cv), instrumentation (logs/metrics).
+Humility: Avoid reductionism — no single paradigm explains everything; model choices carry assumptions/limits.
 """
+
+    def _infer_question_type(self, query: str) -> tuple[str, str]:
+        """Infer question type and formatting directives from the query string."""
+        q = (query or "").lower()
+        # Heuristic labels
+        if any(k in q for k in ["bug", "error", "traceback", "exception", "fix", "not working", "why"]):
+            return (
+                "debugging",
+                "Provide minimal reproducible example, diagnosis steps, probable causes, and a tested fix (code blocks)."
+            )
+        if any(k in q for k in ["how do i", "how to", "steps", "guide", "tutorial", "procedure"]):
+            return ("how-to", "Provide numbered steps, checklists, and verification steps; keep code minimal and runnable.")
+        if any(k in q for k in ["compare", "vs", "difference", "pros", "cons", "tradeoff"]):
+            return ("comparison", "Provide a concise comparison table plus recommendation.")
+        if any(k in q for k in ["design", "architecture", "diagram", "system design"]):
+            return ("design", "Provide layered sections, responsibilities, sequence/flow, and risks; include a table of components.")
+        if any(k in q for k in ["code", "python", "javascript", "java", "c#", "sql", "regex", "snippet"]):
+            return ("code", "Provide code blocks with comments, and a quick test/run example; add pitfalls.")
+        if any(k in q for k in ["formula", "math", "calculate", "derivation"]):
+            return ("math", "Provide formulas, derivations, and example calculation; keep steps clear.")
+        if any(k in q for k in ["table", "list", "checklist"]):
+            return ("list", "Provide a table or bullet list, then a short narrative.")
+        return ("general", "Default to clear sections with examples; include steps if applicable.")
+
+    def _extract_sections(self, response_text: str) -> Dict[str, str]:
+        """Extract Executive Summary, Answer, and Technical Appendix from markdown-like text."""
+        text = response_text or ""
+        sections = {"executive_summary": "", "answer": "", "technical_appendix": ""}
+
+        # Regex patterns for headings (case-insensitive)
+        patterns = {
+            "executive_summary": r"^\s{0,3}#\s*Executive\s+Summary\b.*$",
+            "answer": r"^\s{0,3}#\s*Answer\b.*$",
+            "technical_appendix": r"^\s{0,3}#\s*Technical\s+Appendix\b.*$",
+        }
+
+        # Find positions of headings
+        indices = {}
+        for key, pat in patterns.items():
+            m = re.search(pat, text, flags=re.IGNORECASE | re.MULTILINE)
+            if m:
+                indices[key] = m.start()
+
+        if indices:
+            # Sort by position
+            ordered = sorted(indices.items(), key=lambda kv: kv[1])
+            # Slice sections in order
+            for i, (name, start) in enumerate(ordered):
+                end = len(text)
+                if i + 1 < len(ordered):
+                    end = ordered[i + 1][1]
+                content = text[start:end].strip()
+                # Remove the heading line itself
+                content = re.sub(r"^\s{0,3}#\s*[^\n]+\n?", "", content)
+                sections[name] = content.strip()
+        else:
+            # Fallback heuristics: first 8-12 lines as exec summary, rest as answer
+            lines = text.splitlines()
+            head = "\n".join(lines[: min(12, len(lines))]).strip()
+            tail = "\n".join(lines[min(12, len(lines)) :]).strip()
+            sections["executive_summary"] = head
+            sections["answer"] = tail
+
+        return sections
     
     def get_system_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics including Redis status."""
@@ -1376,53 +1511,68 @@ Confidence Level: 0.75 (Local Processing Mode)
             return "N/A"
         except:
             return "N/A"
-
+        
     def display_professional_response(self, result: Dict[str, Any], user_query: str) -> None:
-        """Display response using professional formatting with visual interface."""
-        # Get the actual visual interface object
+        """Display response with Explorer-style Executive Summary (intro + 3–5 bullets) and a <=100-word TL;DR."""
+        # Visual interface check
         visual_interface_obj = None
         if isinstance(self.visual_interface, dict) and self.visual_interface.get("status") == "active":
             visual_interface_obj = self.visual_interface.get("interface")
-        
+
+        # Parse sections
+        sections = self._extract_sections(result.get("gemini_response", ""))
+        exec_summary = sections.get("executive_summary", "").strip()
+        answer = sections.get("answer", "").strip()
+        appendix = sections.get("technical_appendix", "").strip()
+
+        # Executive Summary intro + bullets
+        intro_sentence = self._extract_intro_sentence(exec_summary)
+        exec_summary_bulleted = self._condense_exec_summary_to_bullets(exec_summary, max_items=5, min_items=3, add_appendix_refs=True)
+
         if not visual_interface_obj:
-            # Fallback to simple formatting
-            print(f"\n🎯 MARS Response:")
-            print("-" * 60)
-            print(result['gemini_response'])
-            print("-" * 60)
-            print(f"⏱️  Processed in {result['processing_time']:.2f} seconds")
-            print(f"📊 Task ID: {result['task_id']}")
+            # Plain markdown fallback
+            print("\n# MARS Quantum Intelligence Response")
+            print("\n## User Query\n> " + user_query)
+            print("\n## Executive Summary")
+            if intro_sentence:
+                print(intro_sentence)
+            print("\n" + (exec_summary_bulleted or "(not provided)"))
+            print("\n## Answer\n" + (answer or "(not provided)"))
+            print("\n## Technical Appendix\n" + (appendix or "(not provided)"))
+            tldr_content = self._generate_tldr_combined(exec_summary, appendix)
+            print("\n## TL;DR\n" + tldr_content)
+            print(f"\nProcessed in {result['processing_time']:.2f}s | Task: {result['task_id']}")
             return
-            
-        # Professional header
-        visual_interface_obj.print_header("🎯 MARS QUANTUM INTELLIGENCE RESPONSE", level=1, center=True)
-        
-        # Query display
-        visual_interface_obj.print_panel(
-            f"Query: {user_query}",
-            title="🔍 User Query",
-            style=OutputStyle.INFO
-        )
-        
-        # Main response content
-        visual_interface_obj.print_panel(
-            result['gemini_response'],
-            title="🧠 MARS Analysis & Response",
-            style=OutputStyle.NORMAL
-        )
-        
-        # Create TL;DR section
-        tldr_content = self._generate_tldr(result['gemini_response'], user_query)
-        visual_interface_obj.print_panel(
-            tldr_content,
-            title="📝 TL;DR (Too Long; Didn't Read)",
-            style=OutputStyle.HIGHLIGHT
-        )
-        
-        # Performance metrics table
+
+        # Rich markdown rendering
+        visual_interface_obj.print_markdown("# MARS Quantum Intelligence Response")
+        visual_interface_obj.print_markdown("## User Query")
+        visual_interface_obj.print_markdown(f"> {user_query}")
+
+        if exec_summary_bulleted:
+            visual_interface_obj.print_markdown("## Executive Summary")
+            if intro_sentence:
+                visual_interface_obj.print_markdown(intro_sentence)
+            visual_interface_obj.print_markdown(exec_summary_bulleted)
+            self._render_glossary(visual_interface_obj, exec_summary, section_name="Executive Summary")
+
+        if answer:
+            visual_interface_obj.print_markdown("## Answer")
+            visual_interface_obj.print_markdown(answer)
+            self._render_glossary(visual_interface_obj, answer, section_name="Answer")
+
+        if appendix:
+            visual_interface_obj.print_markdown("## Technical Appendix")
+            visual_interface_obj.print_markdown(appendix)
+            self._render_glossary(visual_interface_obj, appendix, section_name="Technical Appendix")
+
+    # TL;DR (single sentence, <= 100 words)
+        tldr_content = self._generate_tldr_combined(exec_summary, appendix)
+        visual_interface_obj.print_markdown("## TL;DR")
+        visual_interface_obj.print_markdown(tldr_content)
+
+        # Metrics
         api_model_used = result.get('api_used', 'Unknown')
-        
-        # Add model status indicators
         model_status = ""
         if "(partial)" in api_model_used:
             model_status = " ⚠️ (Partial Response)"
@@ -1436,11 +1586,9 @@ Confidence Level: 0.75 (Local Processing Mode)
             model_status = " 🔄 (Fallback Model)"
         elif api_model_used == "gemini-2.5-pro":
             model_status = " ✅ (Primary Model)"
-        
-        # Get additional details from MARS analysis
+
         mars_analysis = result.get('mars_analysis', [{}])[0]
         actual_model = mars_analysis.get('model_used', api_model_used)
-        
         metrics_data = [
             ["Task ID", result['task_id']],
             ["Processing Time", f"{result['processing_time']:.3f} seconds"],
@@ -1452,20 +1600,12 @@ Confidence Level: 0.75 (Local Processing Mode)
             ["Analysis Status", "✅ Complete" if result['gemini_response'] else "⚠️ Partial"],
             ["Confidence", f"{mars_analysis.get('confidence', 0.0):.1%}"]
         ]
-        
-        visual_interface_obj.print_table(
-            headers=["Metric", "Value"],
-            rows=metrics_data,
-            title="⚡ Performance Metrics"
-        )
-        
-        # System status indicators
+        metrics_md = self._build_metrics_markdown_table(metrics_data, title="⚡ Performance Metrics")
+        visual_interface_obj.print_markdown(metrics_md)
+
+        # Status indicators
         status_indicators = []
-        if self.gemini_available:
-            status_indicators.append("🟢 Gemini API: Connected")
-        else:
-            status_indicators.append("🟡 Gemini API: Local Processing")
-            
+        status_indicators.append("🟢 Gemini API: Connected" if self.gemini_available else "🟡 Gemini API: Local Processing")
         status_indicators.extend([
             f"🧠 Cognitive Network: {'Active' if self.cognitive_network else 'Standby'}",
             f"⚛️ Quantum Neural: {'Operational' if self.quantum_neural_network else 'Mock'}",
@@ -1474,28 +1614,20 @@ Confidence Level: 0.75 (Local Processing Mode)
             f"📊 Telemetry: Active",
             f"💾 Redis Cache: {self._get_redis_status_indicator()}"
         ])
-        
-        status_content = "\n".join(status_indicators)
-        visual_interface_obj.print_panel(
-            status_content,
-            title="🚀 System Status",
-            style=OutputStyle.SUCCESS
+        visual_interface_obj.print_header("🚀 System Status", level=2)
+        visual_interface_obj.print_markdown("\n".join([f"- {line}" for line in status_indicators]))
+
+        # Footer
+        footer_content = (
+            "**Available Commands**\n\n"
+            "- Type 'demo' to run system demonstration\n"
+            "- Type 'stats' to view detailed system statistics\n"
+            "- Type 'redis' to check Redis cache status and run demo\n"
+            "- Type 'exit' to quit the application\n"
+            "- Ask any question for AI-powered analysis\n"
         )
-        
-        # Footer with helpful commands
-        footer_content = """
-Available Commands:
-• Type 'demo' to run system demonstration
-• Type 'stats' to view detailed system statistics
-• Type 'redis' to check Redis cache status and run demo
-• Type 'exit' to quit the application
-• Ask any question for AI-powered analysis
-"""
-        visual_interface_obj.print_panel(
-            footer_content,
-            title="💡 Quick Commands",
-            style=OutputStyle.INFO
-        )
+        visual_interface_obj.print_header("💡 Quick Commands", level=2)
+        visual_interface_obj.print_markdown(footer_content)
     
     def _get_redis_status_indicator(self):
         """Get Redis status indicator for display."""
@@ -1508,9 +1640,128 @@ Available Commands:
             return "Not Installed"
         else:
             return "Error"
+
+    def _extract_intro_sentence(self, exec_summary: str) -> str:
+        """Extract a single-sentence overview from the Executive Summary (first non-bullet sentence)."""
+        if not exec_summary:
+            return ""
+        # Prefer first non-bullet line as the intro sentence
+        lines = [l.strip() for l in exec_summary.splitlines() if l.strip()]
+        for l in lines:
+            if not l.lstrip().startswith(('-', '*', '•', '◦', '→', '▪')):
+                # Trim to one sentence
+                s = l.replace('\n', ' ').strip()
+                # Ensure ends with a period
+                return s.rstrip(' .;:!?') + '.' if s else ''
+        # Fallback: first sentence from the whole text
+        text = exec_summary.replace('\n', ' ')
+        sentence = text.split('. ')[0].strip()
+        return sentence.rstrip(' .;:!?') + '.' if sentence else ''
+
+    def _condense_exec_summary_to_bullets(self, exec_summary: str, max_items: int = 5, min_items: int = 3, add_appendix_refs: bool = True) -> str:
+        """Trim Executive Summary to 3–5 readable bullets and optionally add '(see Appendix for details)'."""
+        if not exec_summary:
+            return ""
+
+        # Split by lines and sentences to find candidate bullets
+        lines = [l.strip("-•* ") for l in exec_summary.splitlines() if l.strip()]
+        candidates: list[str] = []
+        for l in lines:
+            if len(l) > 12:
+                candidates.append(l.rstrip('.'))
+        if not candidates:
+            # fallback: split into sentences
+            sentences = [s.strip() for s in exec_summary.replace('\n', ' ').split('. ') if s.strip()]
+            candidates = [s.rstrip('.') for s in sentences]
+
+        bullets = []
+        for c in candidates:
+            text = c
+            # Add cross-reference hints when appropriate
+            if add_appendix_refs and any(k in c.lower() for k in ["details", "architecture", "assumption", "metric", "benchmark", "limits", "trade-off", "method"]):
+                if "(see Appendix for details)" not in c:
+                    text = f"{c} (see Appendix for details)"
+            bullets.append(text)
+            if len(bullets) >= max_items:
+                break
+
+        if not bullets:
+            return exec_summary
+
+        # Ensure at least min_items if possible
+        if len(bullets) < min_items and len(candidates) > len(bullets):
+            for c in candidates[len(bullets):]:
+                bullets.append(c)
+                if len(bullets) >= min_items:
+                    break
+
+        return "\n".join([f"- {b}." if not b.endswith('.') else f"- {b}" for b in bullets])
+
+    def _build_metrics_markdown_table(self, rows: list[list[str]], title: str | None = None) -> str:
+        """Create a simple markdown table from rows."""
+        header = "| Metric | Value |\n|---|---|"
+        body = "\n".join([f"| {m} | {v} |" for m, v in rows])
+        title_md = f"\n\n### {title}\n\n" if title else "\n\n"
+        return f"{title_md}{header}\n{body}"
+
+    def _stylize_bullets(self, text: str) -> str:
+        """Apply multiple bullet styles and spacing for visual appeal in markdown contexts."""
+        if not text:
+            return text
+        lines = [l for l in text.splitlines()]
+        styled = []
+        glyphs = ["•", "-", "◦", "→", "▪"]
+        gi = 0
+        for l in lines:
+            s = l.strip()
+            if s.startswith(('-', '*', '•', '◦', '→', '▪')):
+                content = s.lstrip('-*•◦→▪ ').strip()
+                styled.append(f"{glyphs[gi % len(glyphs)]} {content}")
+                gi += 1
+            else:
+                styled.append(l)
+        return "\n".join(styled)
+
+    def _extract_glossary_terms(self, text: str) -> list[tuple[str, str]]:
+        """Find heavy jargon terms and provide crisp explanations."""
+        if not text:
+            return []
+        # Simple heuristic-based glossary
+        glossary_map = {
+            "latency": "Time delay in processing or response.",
+            "throughput": "Amount of work processed per unit time.",
+            "scalability": "Ability to handle growth in users or data.",
+            "fallback": "Backup method used when the primary fails.",
+            "assumption": "Something taken as true without proof for the solution.",
+            "trade-off": "A balance where improving one thing may worsen another.",
+            "bayesian": "A statistical approach that updates beliefs with evidence.",
+            "symbolic": "Reasoning with explicit rules/logic rather than patterns.",
+            "manifold": "A structured space to represent complex relationships.",
+            "telemetry": "Automatic data collection about system behavior.",
+            "confidence": "A rough measure of how reliable a result may be.",
+            "benchmark": "A standardized test for performance.",
+            "inference": "Using a model to make predictions or decisions.",
+            "vector": "An ordered list of numbers representing data.",
+        }
+        found = []
+        lower = text.lower()
+        for term, expl in glossary_map.items():
+            if term in lower:
+                # capture the original casing if present
+                idx = lower.find(term)
+                orig = text[idx: idx + len(term)]
+                found.append((orig, expl))
+        return found[:6]
+
+    def _render_glossary(self, visual_interface_obj, text: str, section_name: str) -> None:
+        terms = self._extract_glossary_terms(text)
+        if not terms:
+            return
+        md = "\n".join([f"- **{t}** — {e}" for t, e in terms])
+        visual_interface_obj.print_panel(md, title=f"📚 Glossary — {section_name}", style=OutputStyle.NORMAL)
     
     def _generate_tldr(self, response: str, query: str) -> str:
-        """Generate a concise TL;DR summary with 1-2 lines plus exactly 5 key points."""
+        """Generate a concise TL;DR summary with 1-2 lines plus exactly 5 key points. (Legacy path)"""
         lines = response.split('\n')
         sentences = response.replace('\n', ' ').split('. ')
         
@@ -1636,7 +1887,7 @@ Available Commands:
                     key_points.append("Comprehensive solution framework with practical applicability established")
         
         # Format the final TL;DR
-        tldr = f"� {summary}\n\n🎯 Key Points:\n"
+        tldr = f"• {summary}\n\n🎯 Key Points:\n"
         
         for i, point in enumerate(key_points, 1):
             # Clean and format each point
@@ -1647,8 +1898,45 @@ Available Commands:
             if point and point[0].islower():
                 point = point[0].upper() + point[1:]
             tldr += f"{i}. {point}\n"
-            
-        return tldr# ========================================
+        
+        return tldr
+
+    def _generate_tldr_combined(self, executive_summary: str, technical_appendix: str) -> str:
+        """Generate a TL;DR capped at 100 words (single line), combining Executive Summary with an optional appendix hint."""
+        # Extract candidate lines from executive summary
+        exec_lines = [l.strip("- •\t ") for l in (executive_summary or "").splitlines() if l.strip()]
+        lead = ""
+        for l in exec_lines:
+            if len(l) >= 80:
+                lead = l
+                break
+        if not lead and exec_lines:
+            lead = exec_lines[0]
+        if not lead:
+            lead = "Concise synthesis of the core outcome and decisions."
+
+        # Normalize whitespace and punctuation
+        lead = lead.replace("\n", " ").strip()
+        lead = lead.rstrip(" .;:!?")
+
+        # Optional inline appendix hint to reflect combined summary intent
+        if (technical_appendix or "").strip() and "appendix" not in lead.lower():
+            lead = lead + "; see Appendix for details"
+
+        # Enforce max 100 words
+        words = [w for w in lead.split() if w]
+        max_words = 100
+        if len(words) > max_words:
+            lead = " ".join(words[:max_words]).rstrip(",;: ") + "…"
+        else:
+            lead = " ".join(words)
+
+        # Ensure terminal period if not truncated
+        if not lead.endswith("…"):
+            lead = lead.rstrip(" .;:!?") + "."
+
+        # Ensure single line
+        return lead.replace("\n", " ")
 # MAIN EXECUTION
 # ========================================
 
@@ -1676,6 +1964,11 @@ async def main():
         while True:
             try:
                 print(f"\n🔹 Query #{query_count + 1}")
+                # Mode selection prompt before query
+                print("Select Mode: [1] Apprentice  [2] Scholar  [3] Sage")
+                mode_in = input("Mode (1/2/3 or name): ").strip()
+                orchestrator.set_mode(mode_in or orchestrator.response_mode)
+                print(f"Mode set to: {orchestrator.response_mode} (steep learning curve enabled; glossary will include prerequisites)")
                 user_input = input("You: ").strip()
                 
                 if not user_input:
