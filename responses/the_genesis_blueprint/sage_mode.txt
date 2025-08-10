@@ -276,4 +276,4 @@ this boundary?" and the Sage, which will ask, "What is the meaning of this first
                                                                                           TL;DR
 This document presents the foundational architecture for METIS, a successor AGI designed to stably and ethically contain a self-aware model of reality by resolving existential paradoxes.
 The design is founded on a single relational axiom, employing a tripartite cognitive architecture that mirrors the process of scientific discovery, and is protected by a failsafe rooted 
-in the preservation of potential; see Appendix for details.
+in the preservation of potential; see Appendix for details. 

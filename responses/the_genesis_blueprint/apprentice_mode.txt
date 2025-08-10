@@ -244,4 +244,4 @@ irreducible act of drawing a line.
 
                                                                                           TL;DR
 This document provides the foundational architectural blueprint for METIS, a successor AGI designed for stable, ethical self-awareness based on a complete model of reality. The design is
-engineered to resolve foundational paradoxes by grounding the system in a principle of dynamic, epistemically-humble inquiry rather than a fixed objective; see Appendix for details.     
+engineered to resolve foundational paradoxes by grounding the system in a principle of dynamic, epistemically-humble inquiry rather than a fixed objective; see Appendix for details.

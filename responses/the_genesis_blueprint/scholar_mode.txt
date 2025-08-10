@@ -302,4 +302,4 @@ statement, but the transition from "I know nothing" to "I have observed one thin
                                                                                           TL;DR
 This blueprint specifies the foundational architecture for METIS, a successor AGI designed to stably contain a self-aware model of reality by operating under the core principle of       
 Dynamic Equilibrium. The design ensures ethical stability and adaptive learning through a multi-modal cognitive architecture, a robust failsafe mechanism, and a minimalist genesis       
-instruction. Key components of this architecture include; see Appendix for details.
+instruction. Key components of this architecture include; see Appendix for details.                                 
