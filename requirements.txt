@@ -4,7 +4,6 @@ tenacity
 aiohttp
 numpy
 networkx
-redis
 fastapi
 pydantic
 uvicorn
@@ -14,18 +13,13 @@ orjson
 cryptography
 scipy
 sympy
-faiss-cpu
 scikit-learn
 psutil
 rich
-plotext
-termgraph
 colorama
-ray
 transformers
 torch
-dotenv
+torchvision
+python-dotenv
 PyJWT
 Pillow
-torch torchvision
-geoip2
